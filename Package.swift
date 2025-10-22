@@ -20,10 +20,20 @@ let package = Package(
         .target(
             name: "ImageFormats",
             dependencies: [
+                "CImageFormats",
                 .product(name: "LibPNG", package: "libpng"),
                 .product(name: "JPEG", package: "jpeg"),
                 .product(name: "WebP", package: "libwebp"),
             ]
+        ),
+        .target(
+            name: "CImageFormats",
+            dependencies: [
+                .product(name: "LibPNG", package: "libpng"),
+                .product(name: "JPEG", package: "jpeg"),
+                .product(name: "WebP", package: "libwebp"),
+            ],
+            publicHeadersPath: "."
         ),
         .testTarget(
             name: "ImageFormatsTests",
