@@ -123,6 +123,7 @@ extension ImageFormats.Image<RGBA> {
     if colorType == PNG_COLOR_TYPE_GRAY || colorType == PNG_COLOR_TYPE_GRAY_ALPHA {
       png_set_gray_to_rgb(pngPtr)
     }
+    let numPasses = png_set_interlace_handling(pngPtr)
     if swift_png_safe_read_update_info(pngPtr, infoPtr) == 0 {
       let cmsg = swift_png_get_last_error(pngPtr)
       let message =
@@ -141,23 +142,32 @@ extension ImageFormats.Image<RGBA> {
         ptr.baseAddress! + rowBytes * $0
       }
 
-      let updateInterval = max(1, Int(height) / 16)  // update ~16 times total
-      for (i, row) in rowPointers.enumerated() {
-        if swift_png_safe_read_row(pngPtr, row.assumingMemoryBound(to: UInt8.self), nil)
-          == 0
-        {
-          let cmsg = swift_png_get_last_error(pngPtr)
-          let message =
-            cmsg != nil
-            ? String(cString: cmsg!) : "libpng decoding error while reading rows"
-          readError = ImageLoadingError.pngError(
-            code: -1, message: message)
-          break
-        }
+      let totalRowReads = Int(numPasses) * Int(height)
+      let updateInterval = max(1, totalRowReads / 16)  // update ~16 times total
+      var rowsRead = 0
 
-        // only call progress handler every N rows or on the last row
-        if i % updateInterval == 0 || i == Int(height) - 1 {
-          progressHandler?(Double(i + 1) / Double(height))
+      for _ in 0..<Int(numPasses) {
+        for (i, row) in rowPointers.enumerated() {
+          if swift_png_safe_read_row(pngPtr, row.assumingMemoryBound(to: UInt8.self), nil)
+            == 0
+          {
+            let cmsg = swift_png_get_last_error(pngPtr)
+            let message =
+              cmsg != nil
+              ? String(cString: cmsg!) : "libpng decoding error while reading rows"
+            readError = ImageLoadingError.pngError(
+              code: -1, message: message)
+            break
+          }
+
+          rowsRead += 1
+          // only call progress handler every N rows or on the last row
+          if rowsRead % updateInterval == 0 || rowsRead == totalRowReads || i == Int(height) - 1 {
+            progressHandler?(Double(rowsRead) / Double(totalRowReads))
+          }
+        }
+        if readError != nil {
+          break
         }
       }
     }
